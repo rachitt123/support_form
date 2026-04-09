@@ -1,0 +1,1588 @@
+{
+  "name": "Multilingual Support Request Triage and Response System",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "form-submission",
+        "options": {}
+      },
+      "id": "97ae4686-c5a0-4a28-88d7-0e4d794933dd",
+      "name": "Google Form Submission",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        112,
+        1264
+      ],
+      "webhookId": "7eaab40b-7dea-4e63-8b0e-ffca081b7120"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.body;\nconst body = typeof raw === \"string\" ? JSON.parse(raw) : raw;\n\nconst name = body[\"name\"] || body[\"FULL name\"] || \"\";\nconst age = body[\"age\"] || \"\";\nconst location = body[\"location\"] || \"\";\nconst email = body[\"email\"] || body[\"email address\"] || \"\";\nconst language = (body[\"language\"] || body[\"preferred language \"] || \"english\").trim().toLowerCase();\nconst requestType = (body[\"requestType\"] || body[\"type of request\"] || \"general\").toLowerCase();\nconst description = body[\"description\"] || body[\"describe request\"] || \"\";\nconst phone = body[\"phone\"] || \"\";\n\nlet urgency = \"Low\";\nconst urgencyKeywords = [\"urgent\", \"emergency\", \"help\", \"asap\", \"critical\", \"अस्पताल\", \"मदद\", \"तुरंत\"];\nurgencyKeywords.forEach(keyword => {\n  if (description.toLowerCase().includes(keyword)) {\n    urgency = \"High\";\n  }\n});\n\nreturn [{ json: { name, age, email, location, language, phone, requestType, description, urgency } }];"
+      },
+      "id": "4bb5a0db-b76d-444d-8e0f-770d414af19d",
+      "name": "Detect Language & Keywords",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        1264
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "2209cf0c-15c9-4424-9092-1b2ebed4f22c",
+      "name": "Gemini Model 1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        640,
+        1488
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YsdmQQd5GnPKU8TF",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n\t\"type\": \"object\",\n\t\"properties\": {\n\t\t\"category\": {\n\t\t\t\"type\": \"string\",\n\t\t\t\"enum\": [\"Medical\", \"Financial\", \"General\"],\n\t\t\t\"description\": \"The category of the support request\"\n\t\t},\n\t\t\"urgency\": {\n\t\t\t\"type\": \"string\",\n\t\t\t\"enum\": [\"High\", \"Medium\", \"Low\"],\n\t\t\t\"description\": \"The urgency level of the request\"\n\t\t},\n\t\t\"translatedText\": {\n\t\t\t\"type\": \"string\",\n\t\t\t\"description\": \"English translation of the original text\"\n\t\t},\n\t\t\"originalLanguage\": {\n\t\t\t\"type\": \"string\",\n\t\t\t\"description\": \"The detected language of the original text\"\n\t\t}\n\t},\n\t\"required\": [\"category\", \"urgency\", \"translatedText\", \"originalLanguage\"]\n}"
+      },
+      "id": "94868006-8f3c-4a9b-9f2c-e5edb58ab0d0",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        112,
+        1984
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Name: {{ $json.name }}\nAge: {{ $json.age }}\nLocation: {{ $json.location }}\nLanguage: {{ $json.language }}\nRequest Type: {{ $json.requestType }}\nDescription: {{ $json.description }}",
+        "options": {
+          "systemMessage": "You are an AI assistant for Aathma Foundation, an NGO helping elderly people in India. \n\nAnalyze support requests and respond ONLY in this exact JSON format with no extra text:\n{\n  \"category\": \"Medical\" or \"Financial\" or \"General\",\n  \"urgency\": \"High\" or \"Medium\" or \"Low\",\n  \"translated_request\": \"English translation of the request\",\n  \"summary\": \"One line summary of what they need\"\n}"
+        }
+      },
+      "id": "10936354-6081-43b0-9ced-f6de748664b8",
+      "name": "Translate & Categorize",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        560,
+        1264
+      ],
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.category }}",
+                    "rightValue": "Medical",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "3ae6b6cf-a5dc-4330-9806-4e7978a2616a"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.category }}",
+                    "rightValue": "Financial",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "632e111e-0a2d-4c3c-b44c-f3fe9e05b7ab"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.category }}",
+                    "rightValue": "General",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "eda822cf-421d-47d5-b089-9de102fd37b3"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "586eef28-17f4-47c4-95d3-e274f1998cdd",
+      "name": "Route by Category",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1136,
+        1248
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "c969a22c-5746-4714-a6f1-22f24f51ada6",
+      "name": "Gemini Model - Medical Response",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        1888
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YsdmQQd5GnPKU8TF",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Name: {{ $('Code in JavaScript').first().json.name }}\nAge: {{ $('Code in JavaScript').first().json.age }}\nLocation: {{ $('Code in JavaScript').first().json.location }}\nLanguage: {{ $('Code in JavaScript').first().json.language }}\nRequest: {{ $('Code in JavaScript').first().json.translated_request }}\nSummary: {{ $('Code in JavaScript').first().json.summary }}\nUrgency: {{ $('Code in JavaScript').first().json.urgency }}\n\nWrite a compassionate urgent response in {{ $('Code in JavaScript').first().json.language }} language.",
+        "options": {
+          "systemMessage": "You are a compassionate assistant for Aathma Foundation helping elderly people with medical needs. Write urgent, caring responses that prioritize their health and safety."
+        }
+      },
+      "id": "7d4bee7c-ca0a-470d-8549-824861b1f169",
+      "name": "Medical Response Generator",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1360,
+        1664
+      ],
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Code in JavaScript').first().json.email }}",
+        "subject": "Re: Your Support Request - Aathma Foundation",
+        "message": "={{ $json.output }}",
+        "options": {}
+      },
+      "id": "65fb6979-8298-441c-a3c1-7ebffdceadb6",
+      "name": "Send Medical Reply",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1712,
+        1664
+      ],
+      "webhookId": "828423eb-2fbf-488d-b2ca-c3f3ec933ae9",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "2jarAx9k5qzKomdt",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "6183238112",
+        "text": "=🚨 URGENT MEDICAL REQUEST!\n\nName: {{ $('Code in JavaScript').first().json.name }}\nAge: {{ $('Code in JavaScript').first().json.age }}\nLocation: {{ $('Code in JavaScript').first().json.location }}\n\nUrgency: {{ $('Code in JavaScript').first().json.urgency }}\nRequest: {{ $('Code in JavaScript').first().json.translated_request }}\n\nPlease follow up immediately!",
+        "additionalFields": {}
+      },
+      "id": "43dfaf36-3ebd-47bc-9525-8c9a55166eba",
+      "name": "Alert NGO Admin",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1936,
+        1664
+      ],
+      "webhookId": "7fb0f312-f2a7-4238-89b0-37114509709d",
+      "credentials": {
+        "telegramApi": {
+          "id": "yniwksLeYsRimCxR",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1IIwYeRKpaq7jr_5B2pOkBDDypwm-pifonUNVnmbtxeI",
+          "mode": "list",
+          "cachedResultName": "Foundation Support Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IIwYeRKpaq7jr_5B2pOkBDDypwm-pifonUNVnmbtxeI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 743238898,
+          "mode": "list",
+          "cachedResultName": "Form responses 1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IIwYeRKpaq7jr_5B2pOkBDDypwm-pifonUNVnmbtxeI/edit#gid=743238898"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "describe request": "={{ $('Code in JavaScript').first().json.translated_request }}",
+            "type of request": "={{ $('Code in JavaScript').first().json.category }}",
+            "preferred language ": "={{ $('Code in JavaScript').first().json.language }}",
+            "email address": "={{ $('Code in JavaScript').first().json.email }}",
+            "location": "={{ $('Code in JavaScript').first().json.location }}",
+            "age": "={{ $('Code in JavaScript').first().json.age }}",
+            "FULL name": "={{ $('Code in JavaScript').first().json.name}}",
+            "Timestamp": "={{ new Date().toISOString() }}",
+            "phone number": "={{ $('Code in JavaScript').item.json.phone }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "FULL name",
+              "displayName": "FULL name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "age",
+              "displayName": "age",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email address",
+              "displayName": "email address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "preferred language ",
+              "displayName": "preferred language ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "type of request",
+              "displayName": "type of request",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "describe request",
+              "displayName": "describe request",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone number",
+              "displayName": "phone number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "6a14ecd3-aa1e-4551-9d27-5c0689de41e6",
+      "name": "Log to Medical Tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2160,
+        1664
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "i73lfCNy2oMeropj",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "10c6e27d-b0ea-4f3c-ba76-1e704d8fb789",
+      "name": "Gemini Model - Financial Response",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        1376
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YsdmQQd5GnPKU8TF",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Name: {{ $json.name }}\nAge: {{ $json.age }}\nLocation: {{ $json.location }}\nLanguage: {{ $json.language }}\nRequest: {{ $json.translated_request }}\nSummary: {{ $json.summary }}\n\nWrite a compassionate response in {{ $json.language }} language.",
+        "options": {
+          "systemMessage": "You are a compassionate assistant for Aathma Foundation, an NGO helping elderly people in India. Write warm, helpful, short responses (3-4 sentences) in the person's language. Always include next steps they should take."
+        }
+      },
+      "id": "a06e9f80-f531-4544-910b-a2e641dcb058",
+      "name": "Financial Response Generator",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1360,
+        1152
+      ],
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Code in JavaScript').first().json.email }}",
+        "subject": "Re: Your Support Request - Aathma Foundation",
+        "message": "={{ $json.output }}",
+        "options": {}
+      },
+      "id": "70d0742e-ca31-444b-9493-b216238222a8",
+      "name": "Send Financial Reply",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1744,
+        1152
+      ],
+      "webhookId": "05bdbd9a-ce87-4726-baa0-0bc762debda1",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "2jarAx9k5qzKomdt",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1IIwYeRKpaq7jr_5B2pOkBDDypwm-pifonUNVnmbtxeI",
+          "mode": "list",
+          "cachedResultName": "Foundation Support Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IIwYeRKpaq7jr_5B2pOkBDDypwm-pifonUNVnmbtxeI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 743238898,
+          "mode": "list",
+          "cachedResultName": "Form responses 1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IIwYeRKpaq7jr_5B2pOkBDDypwm-pifonUNVnmbtxeI/edit#gid=743238898"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "FULL name": "={{ $('Code in JavaScript').first().json.name }}",
+            "email address": "={{ $('Code in JavaScript').first().json.email }}",
+            "age": "={{ $('Code in JavaScript').first().json.age }}",
+            "location": "={{ $('Code in JavaScript').first().json.location }}",
+            "preferred language ": "={{ $('Code in JavaScript').first().json.language }}",
+            "Timestamp": "={{ new Date().toISOString() }}",
+            "type of request": "={{ $('Code in JavaScript').first().json.category }}",
+            "describe request": "={{ $('Code in JavaScript').first().json.translated_request }}",
+            "phone number": "={{ $('Code in JavaScript').item.json.phone }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "FULL name",
+              "displayName": "FULL name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "age",
+              "displayName": "age",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email address",
+              "displayName": "email address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "preferred language ",
+              "displayName": "preferred language ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "type of request",
+              "displayName": "type of request",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "describe request",
+              "displayName": "describe request",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone number",
+              "displayName": "phone number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "7b41cf39-5630-4222-9942-41e49324f64a",
+      "name": "Log to Financial Tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1968,
+        1168
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "i73lfCNy2oMeropj",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "523b2fb6-dfbf-400e-8a99-355b8dd0fddd",
+      "name": "Gemini Model - General Response",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        976
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YsdmQQd5GnPKU8TF",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Name: {{ $('Code in JavaScript').first().json.name }}\nAge: {{ $('Code in JavaScript').first().json.age }}\nLocation: {{ $('Code in JavaScript').first().json.location }}\nLanguage: {{ $('Code in JavaScript').first().json.language }}\nRequest: {{ $('Code in JavaScript').first().json.translated_request }}\nSummary: {{ $('Code in JavaScript').first().json.summary }}\nUrgency: {{ $('Code in JavaScript').first().json.urgency }}\n\nWrite a compassionate urgent response in {{ $('Code in JavaScript').first().json.language }} language.",
+        "options": {
+          "systemMessage": "You are a helpful assistant for Aathma Foundation helping elderly people in India. Write warm, clear responses addressing their general queries."
+        }
+      },
+      "id": "0631b2c3-bfa5-494e-bfcd-7582b22dbb81",
+      "name": "General Response Generator",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1360,
+        752
+      ],
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Code in JavaScript').first().json.email }}",
+        "subject": "Re: Your Support Request - Aathma Foundation",
+        "message": "={{ $json.output }}",
+        "options": {}
+      },
+      "id": "b14f46a6-4e39-41a4-88ea-b5203a18dcc2",
+      "name": "Send General Reply",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1712,
+        960
+      ],
+      "webhookId": "3b2ceb9d-8ebe-42e6-9610-cf10ab36aaa8",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "2jarAx9k5qzKomdt",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1IIwYeRKpaq7jr_5B2pOkBDDypwm-pifonUNVnmbtxeI",
+          "mode": "list",
+          "cachedResultName": "Foundation Support Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IIwYeRKpaq7jr_5B2pOkBDDypwm-pifonUNVnmbtxeI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 743238898,
+          "mode": "list",
+          "cachedResultName": "Form responses 1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IIwYeRKpaq7jr_5B2pOkBDDypwm-pifonUNVnmbtxeI/edit#gid=743238898"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ new Date().toISOString() }}",
+            "FULL name": "={{ $('Code in JavaScript').first().json.name }}",
+            "age": "={{ $('Code in JavaScript').first().json.age }}",
+            "location": "={{ $('Code in JavaScript').first().json.location }}",
+            "email address": "={{ $('Code in JavaScript').first().json.email }}",
+            "preferred language ": "={{ $('Code in JavaScript').first().json.language }}",
+            "type of request": "={{ $('Code in JavaScript').first().json.category }}",
+            "describe request": "={{ $('Code in JavaScript').first().json.translated_request }}",
+            "phone number": "={{ $('Code in JavaScript').item.json.phone }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "FULL name",
+              "displayName": "FULL name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "age",
+              "displayName": "age",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email address",
+              "displayName": "email address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "preferred language ",
+              "displayName": "preferred language ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "type of request",
+              "displayName": "type of request",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "describe request",
+              "displayName": "describe request",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone number",
+              "displayName": "phone number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "1f60bd91-ec4f-4e5c-992f-c549d8eb4b82",
+      "name": "Log to General Tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1936,
+        960
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "i73lfCNy2oMeropj",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.output;\nconst cleaned = raw.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\nconst parsed = JSON.parse(cleaned);\n\nreturn [{\n  json: {\n    category: parsed.category,\n    urgency: parsed.urgency,\n    translated_request: parsed.translated_request,\n    summary: parsed.summary,\n    name: $('Detect Language & Keywords').first().json.name,\n    age: $('Detect Language & Keywords').first().json.age,\n    email: $('Detect Language & Keywords').first().json.email,\n    phone: $('Detect Language & Keywords').first().json.phone,\n    location: $('Detect Language & Keywords').first().json.location,\n    language: $('Detect Language & Keywords').first().json.language\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        1264
+      ],
+      "id": "c838d91b-53f7-49f2-a982-090aa61f18ca",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "error_message",
+              "value": "={{ $json.error.message }}",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "error_name",
+              "value": "={{ $json.error.name }}",
+              "type": "string"
+            },
+            {
+              "id": "id-3",
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            },
+            {
+              "id": "id-4",
+              "name": "category",
+              "value": "={{ $('Code in JavaScript').first().json.category }}",
+              "type": "string"
+            },
+            {
+              "id": "id-5",
+              "name": "user_email",
+              "value": "={{ $('Code in JavaScript').first().json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "id-6",
+              "name": "user_name",
+              "value": "={{ $('Code in JavaScript').first().json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "8dce3e60-3901-4d12-a6fe-a32e87543439",
+              "name": "error message",
+              "value": "={{ $json.error.message }}",
+              "type": "string"
+            },
+            {
+              "id": "0de0c479-a178-44a9-87a6-afd931dd977e",
+              "name": "status",
+              "value": "Not Responded - Gemini Unavailable",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c86f1490-f9f8-4022-a8a3-34f7caf1a68e",
+      "name": "Log General Response Error",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1712,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "1IIwYeRKpaq7jr_5B2pOkBDDypwm-pifonUNVnmbtxeI",
+          "cachedResultName": "Foundation Support Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IIwYeRKpaq7jr_5B2pOkBDDypwm-pifonUNVnmbtxeI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1493576544,
+          "mode": "list",
+          "cachedResultName": "errors",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IIwYeRKpaq7jr_5B2pOkBDDypwm-pifonUNVnmbtxeI/edit#gid=1493576544"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {
+            "Timestamp": "={{ $json.timestamp }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "FULL name",
+              "displayName": "FULL name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "age",
+              "displayName": "age",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email address",
+              "displayName": "email address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "preferred language ",
+              "displayName": "preferred language ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "type of request",
+              "displayName": "type of request",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "describe request",
+              "displayName": "describe request",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone number",
+              "displayName": "phone number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "7187b8dc-50ee-47cf-b573-ecf9aa980ae8",
+      "name": "Log Error to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1936,
+        768
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "i73lfCNy2oMeropj",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "error_message",
+              "value": "={{ $json.error }}",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "error_name",
+              "value": "={{ $('Code in JavaScript').first().json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "id-3",
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            },
+            {
+              "id": "id-4",
+              "name": "category",
+              "value": "={{ $('Code in JavaScript').first().json.category }}",
+              "type": "string"
+            },
+            {
+              "id": "id-5",
+              "name": "user_email",
+              "value": "={{ $('Code in JavaScript').first().json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "id-6",
+              "name": "user_name",
+              "value": "={{ $('Code in JavaScript').first().json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "id-7",
+              "name": "status",
+              "value": "Not Responded - Gemini Unavailable",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c746d3ab-6cc9-4fdb-9c7c-cb4f34025a0d",
+      "name": "Log Medical Response Error",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1792,
+        1952
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "error_message",
+              "value": "={{ $json.error.message }}",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "error_name",
+              "value": "={{ $json.error.name }}",
+              "type": "string"
+            },
+            {
+              "id": "id-3",
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            },
+            {
+              "id": "id-4",
+              "name": "category",
+              "value": "={{ $('Code in JavaScript').first().json.category }}",
+              "type": "string"
+            },
+            {
+              "id": "id-5",
+              "name": "user_email",
+              "value": "={{ $('Code in JavaScript').first().json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "id-6",
+              "name": "user_name",
+              "value": "={{ $('Code in JavaScript').first().json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "id-7",
+              "name": "status",
+              "value": "Not Responded - Gemini Unavailable",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "725535ab-bb16-432b-8424-0edaed258ec8",
+      "name": "Log Financial Response Error",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1728,
+        1344
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "1IIwYeRKpaq7jr_5B2pOkBDDypwm-pifonUNVnmbtxeI",
+          "cachedResultName": "Foundation Support Log"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": 1493576544,
+          "cachedResultName": "errors"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ new Date().toISOString() }}",
+            "FULL name": "={{ $('Code in JavaScript').first().json.name }}",
+            "age": "={{ $('Code in JavaScript').first().json.age }}",
+            "location": "={{ $('Code in JavaScript').first().json.location }}",
+            "email address": "={{ $('Code in JavaScript').first().json.email }}",
+            "preferred language ": "={{ $('Code in JavaScript').first().json.language }}",
+            "type of request": "={{ $('Code in JavaScript').first().json.category }}",
+            "describe request": "={{ $('Code in JavaScript').first().json.translated_request }}",
+            "phone number": "={{ $('Code in JavaScript').first().json.phone }}",
+            "error message ": "={{ JSON.stringify($json) }}",
+            "status": "not responded- gemini down"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "FULL name",
+              "displayName": "FULL name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "age",
+              "displayName": "age",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email address",
+              "displayName": "email address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "preferred language ",
+              "displayName": "preferred language ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "type of request",
+              "displayName": "type of request",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "describe request",
+              "displayName": "describe request",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone number",
+              "displayName": "phone number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "error message ",
+              "displayName": "error message ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "c6553729-ed9e-49b0-b354-70c19f8b8742",
+      "name": "Log Medical Error to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2128,
+        1984
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "i73lfCNy2oMeropj",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "1IIwYeRKpaq7jr_5B2pOkBDDypwm-pifonUNVnmbtxeI",
+          "cachedResultName": "Foundation Support Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IIwYeRKpaq7jr_5B2pOkBDDypwm-pifonUNVnmbtxeI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": 1493576544,
+          "cachedResultName": "errors",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IIwYeRKpaq7jr_5B2pOkBDDypwm-pifonUNVnmbtxeI/edit#gid=1493576544"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "e7fdcd3e-aef9-49a0-8fa6-e6693ca8cf25",
+      "name": "Log Financial Error to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2000,
+        1376
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "i73lfCNy2oMeropj",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Form Submission": {
+      "main": [
+        [
+          {
+            "node": "Detect Language & Keywords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Language & Keywords": {
+      "main": [
+        [
+          {
+            "node": "Translate & Categorize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Model 1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Translate & Categorize",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        []
+      ]
+    },
+    "Translate & Categorize": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Category": {
+      "main": [
+        [
+          {
+            "node": "Medical Response Generator",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Financial Response Generator",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "General Response Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Model - Medical Response": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Medical Response Generator",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Medical Response Generator": {
+      "main": [
+        [
+          {
+            "node": "Send Medical Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Medical Response Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Medical Reply": {
+      "main": [
+        [
+          {
+            "node": "Alert NGO Admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert NGO Admin": {
+      "main": [
+        [
+          {
+            "node": "Log to Medical Tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Model - Financial Response": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Financial Response Generator",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Financial Response Generator": {
+      "main": [
+        [
+          {
+            "node": "Send Financial Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Financial Response Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Financial Reply": {
+      "main": [
+        [
+          {
+            "node": "Log to Financial Tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Model - General Response": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "General Response Generator",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "General Response Generator": {
+      "main": [
+        [
+          {
+            "node": "Send General Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log General Response Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send General Reply": {
+      "main": [
+        [
+          {
+            "node": "Log to General Tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Route by Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to General Tab": {
+      "main": [
+        []
+      ]
+    },
+    "Log General Response Error": {
+      "main": [
+        [
+          {
+            "node": "Log Error to Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Error to Sheets": {
+      "main": [
+        []
+      ]
+    },
+    "Log Medical Response Error": {
+      "main": [
+        [
+          {
+            "node": "Log Medical Error to Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Financial Response Error": {
+      "main": [
+        [
+          {
+            "node": "Log Financial Error to Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "7f3c45d7-5d47-48e4-b20e-9b3bade4603a",
+  "meta": {
+    "instanceId": "274a3fa70d049dcce0f505596a7348617aa99befbbd82a8976318f943475317d"
+  },
+  "id": "WKX024KWalAbNF6S",
+  "tags": []
+}
