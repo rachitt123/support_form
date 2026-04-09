@@ -1,5 +1,5 @@
 # support_form
-# support Foundation - Multilingual Support System
+# Multilingual Support System
 
 ## Project Overview
 Automated multilingual support request triage system for support Foundation NGO.
